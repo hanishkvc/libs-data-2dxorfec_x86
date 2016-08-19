@@ -30,10 +30,10 @@ void fec_genfec(uint8_t *buf, int blocksize, int matrix)
 		for(int i = 0; i < blocksize; i+= 16) {
 			res = _mm_setzero_si128();
 			for(int x = 0; x < matrix; x++) {
-				val = _mm_loadu_si128((__m128i*)&buf[iCurRowOffset+x*blocksize+i*16]);
+				val = _mm_loadu_si128((__m128i*)&buf[iCurRowOffset+x*blocksize+i]);
 				res = _mm_xor_si128(res, val);
 			}
-			_mm_storeu_si128((__m128i*)&buf[iCurRowOffset+matrix*blocksize+i*16], res);
+			_mm_storeu_si128((__m128i*)&buf[iCurRowOffset+matrix*blocksize+i], res);
 		}
 	}
 }
@@ -61,17 +61,20 @@ int main(int argc, char **argv)
 	int iMatrix;
 
 	hFSrc = open(argv[1],O_RDONLY);
-	hFDst = open(argv[2],O_WRONLY);
+	hFDst = open(argv[2],O_CREAT | O_WRONLY);
 
 	iMatrix = 0;
 	while(1) {
+		printf("FEC:INFO: processing data matrix [%d]\n", iMatrix);
 		if (fec_loadbuf(buf, hFSrc, FEC_BLOCKSIZE, FEC_DATAMATRIX1D) != 0) {
+			printf("FEC:INFO: failed loading of data matrix [%d], maybe EOF, quiting...\n", iMatrix);
 			break;
 		} else {
-			printf("FEC:INFO: processing data matrix [%d]\n", iMatrix);
+			printf("FEC:INFO: loaded data matrix [%d]\n", iMatrix);
 		}
 		fec_genfec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
 		write(hFDst, buf, FEC_BUFFERSIZE);
+		iMatrix += 1;
 	}
 	return 0;
 }
