@@ -78,6 +78,40 @@ void fec_genfec(uint8_t *buf, int blocksize, int matrix)
 	}
 }
 
+void fec_usefec(uint8_t *buf, int blocksize, int matrix)
+{
+	__m128i res, val;
+	int iCurRowOffset;
+
+	// Handle fec for each row of data blocks
+	for(int y = 0; y <= matrix; y++) {
+		iCurRowOffset = y*(matrix+1)*blocksize;
+		for(int i = 0; i < blocksize; i+= 16) {
+			res = _mm_setzero_si128();
+			for(int x = 0; x <= matrix; x++) {
+				val = _mm_loadu_si128((__m128i*)&buf[iCurRowOffset+x*blocksize+i]);
+				res = _mm_xor_si128(res, val);
+			}
+			if (res != 0) {
+				printf("FEC:WARN:Y=Row=%d Not Valid\n",y);
+			}
+		}
+	}
+	// handle fec for each column of data blocks
+	for(int x = 0; x <= matrix; x++) {
+		for(int i = 0; i < blocksize; i+= 16) {
+			res = _mm_setzero_si128();
+			for(int y = 0; y <= matrix; y++) {
+				val = _mm_loadu_si128((__m128i*)&buf[y*(matrix+1)*blocksize+x*blocksize+i]);
+				res = _mm_xor_si128(res, val);
+			}
+			if (res != 0) {
+				printf("FEC:WARN:X=Col=%d Not Valid\n",x);
+			}
+		}
+	}
+}
+
 int fec_loadbuf(uint8_t *buf, int hFile, int blocksize, int matrix)
 {
 	int iRead;
@@ -117,6 +151,7 @@ int main(int argc, char **argv)
 		fec_genfec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
 		fec_printbuf_start(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
 		write(hFDst, buf, FEC_BUFFERSIZE);
+		fec_usefec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
 		iMatrix += 1;
 	}
 	return 0;
