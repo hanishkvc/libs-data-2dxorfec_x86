@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <string.h>
 
 #define FEC_BLOCKSIZE 4096
 #define FEC_DATAMATRIX1D 8
@@ -20,11 +21,14 @@ int fec_validmeta(int blocksize, int matrix)
 	return 0;
 }
 
+// Row major 2D matrix
+// Note2Self: X = Col, Y = Row
 void fec_genfec(uint8_t *buf, int blocksize, int matrix)
 {
 	__m128i res, val;
 	int iCurRowOffset;
 
+	// Handle fec for each row of data blocks
 	for(int y = 0; y < matrix; y++) {
 		iCurRowOffset = y*(matrix+1)*blocksize;
 		for(int i = 0; i < blocksize; i+= 16) {
@@ -34,6 +38,17 @@ void fec_genfec(uint8_t *buf, int blocksize, int matrix)
 				res = _mm_xor_si128(res, val);
 			}
 			_mm_storeu_si128((__m128i*)&buf[iCurRowOffset+matrix*blocksize+i], res);
+		}
+	}
+	// handle fec for each column of data blocks
+	for(int x = 0; x < matrix; x++) {
+		for(int i = 0; i < blocksize; i+= 16) {
+			res = _mm_setzero_si128();
+			for(int y = 0; y < matrix; y++) {
+				val = _mm_loadu_si128((__m128i*)&buf[y*(matrix+1)*blocksize+x*blocksize+i]);
+				res = _mm_xor_si128(res, val);
+			}
+			_mm_storeu_si128((__m128i*)&buf[matrix*(matrix+1)*blocksize+x*blocksize+i], res);
 		}
 	}
 }
@@ -60,6 +75,7 @@ int main(int argc, char **argv)
 	int hFSrc, hFDst;
 	int iMatrix;
 
+	memset(buf, 0, FEC_BUFFERSIZE);
 	hFSrc = open(argv[1],O_RDONLY);
 	hFDst = open(argv[2],O_CREAT | O_WRONLY);
 
