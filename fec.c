@@ -21,6 +21,31 @@ int fec_validmeta(int blocksize, int matrix)
 	return 0;
 }
 
+void m128i_print(__m128i vVal)
+{
+	char *sVal;
+
+	sVal = (char*)&vVal;
+	for(int i = 0; i < 16; i++) {
+		printf(" %02X ",sVal[i]);
+	}
+}
+
+void fec_printbuf_start(uint8_t *buf, int blocksize, int matrix)
+{
+	__m128i val;
+	for(int x = 0; x <= matrix; x++) {
+		for(int y = 0; y <= matrix; y++) {
+			for(int i = 0; i < blocksize; i+= 2048) {
+				val = _mm_loadu_si128((__m128i*)&buf[y*(matrix+1)*blocksize+x*blocksize+i]);
+				printf("FEC:INFO:X[%d],Y[%d],I[%4d]: ", x, y, i);
+				m128i_print(val);
+				printf("\n");
+			}
+		}
+	}
+}
+
 // Row major 2D matrix
 // Note2Self: X = Col, Y = Row
 void fec_genfec(uint8_t *buf, int blocksize, int matrix)
@@ -88,7 +113,9 @@ int main(int argc, char **argv)
 		} else {
 			printf("FEC:INFO: loaded data matrix [%d]\n", iMatrix);
 		}
+		fec_printbuf_start(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
 		fec_genfec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
+		fec_printbuf_start(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
 		write(hFDst, buf, FEC_BUFFERSIZE);
 		iMatrix += 1;
 	}
