@@ -1,3 +1,19 @@
+/*
+ * 2D XOR based FEC
+ * v20160820_1940
+ * HanishKVC, 2016
+ *
+ * This is a new reimplementation of my very old 2d xor based fec logic.
+ * It uses SIMD and other special instructions supported by x86 to help
+ * speed up the fec logic.
+ *
+ * I have avoided looking at my old logic/implementation, to allow new
+ * ideas/logic to emerge if and where possible naturally. Have to check
+ * with my old logic later to see, how similar or dissimilar is some of
+ * the implementation details, in this new take on my old concept.
+ *
+ * Dedicated to my elders.
+ */
 #include <stdio.h>
 #include <stdint.h>
 #include <emmintrin.h>
