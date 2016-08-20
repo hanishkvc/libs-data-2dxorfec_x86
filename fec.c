@@ -13,6 +13,34 @@
 #define FEC_FULLMATRIX ((FEC_DATAMATRIX1D+1)*(FEC_DATAMATRIX1D+1))
 #define FEC_BUFFERSIZE (FEC_FULLMATRIX*FEC_BLOCKSIZE)
 
+#define FEC_MAXMATRIX1D 32
+
+// this structure tells if a given block in the fec buffer is valid or not
+// the bits with in each row correspond to the columns with in that row.
+// So for now this allows a 32x32 fec matrix (including both data and fec)
+// NOTE: row and column are numbered starting from 0
+
+struct fecMatrixFlag {
+	uint32_t row[FEC_MAXMATRIX1D];
+};
+
+void fecmatflag_set(struct fecMatrixFlag *flag, int rowy, int colx)
+{
+	flag->row[rowy] |= (1 << colx);
+}
+
+int fecmatflag_get(struct fecMatrixFlag *flag, int rowy, int colx)
+{
+	return (flag->row[rowy] & (1 << colx));
+}
+
+void fecmatflag_print(struct fecMatrixFlag *flag, int dmatrix)
+{
+	for (int i = 0; i <= dmatrix; i++) {
+		printf("%x\n", flag->row[i]);
+	}
+}
+
 int fec_validmeta(int blocksize, int matrix)
 {
 	if ((blocksize % 16) != 0) {
@@ -78,10 +106,12 @@ void fec_genfec(uint8_t *buf, int blocksize, int matrix)
 	}
 }
 
-void fec_usefec(uint8_t *buf, int blocksize, int matrix)
+void fec_checkfec(uint8_t *buf, int blocksize, int matrix)
 {
 	__m128i res, val;
 	int iCurRowOffset;
+	__v4si v4i32;
+	uint32_t iRes, *p32Res;
 
 	// Handle fec for each row of data blocks
 	for(int y = 0; y <= matrix; y++) {
@@ -92,7 +122,12 @@ void fec_usefec(uint8_t *buf, int blocksize, int matrix)
 				val = _mm_loadu_si128((__m128i*)&buf[iCurRowOffset+x*blocksize+i]);
 				res = _mm_xor_si128(res, val);
 			}
-			if (res != 0) {
+#ifdef FORCE_ERROR
+			res = _mm_set_epi32(0x00,0x55,0xaa,0xff);
+#endif
+			v4i32 = (__v4si)res;
+			iRes = v4i32[0] + v4i32[1] + v4i32[2] + v4i32[3];
+			if (iRes != 0) {
 				printf("FEC:WARN:Y=Row=%d Not Valid\n",y);
 			}
 		}
@@ -105,7 +140,10 @@ void fec_usefec(uint8_t *buf, int blocksize, int matrix)
 				val = _mm_loadu_si128((__m128i*)&buf[y*(matrix+1)*blocksize+x*blocksize+i]);
 				res = _mm_xor_si128(res, val);
 			}
-			if (res != 0) {
+			//iRes = res.m128i_i32[0] + res.m128i_i32[1];
+			p32Res = (uint32_t*)&res;
+			iRes = p32Res[0] + p32Res[1] + p32Res[2] + p32Res[3];
+			if (iRes != 0) {
 				printf("FEC:WARN:X=Col=%d Not Valid\n",x);
 			}
 		}
@@ -151,7 +189,7 @@ int main(int argc, char **argv)
 		fec_genfec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
 		fec_printbuf_start(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
 		write(hFDst, buf, FEC_BUFFERSIZE);
-		fec_usefec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
+		fec_checkfec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
 		iMatrix += 1;
 	}
 	return 0;
