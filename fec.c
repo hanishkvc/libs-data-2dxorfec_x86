@@ -23,6 +23,8 @@
 
 struct fecMatrixFlag {
 	uint32_t blocks[FEC_MAXMATRIX1D];
+	uint32_t rowview[FEC_MAXMATRIX1D];
+	uint32_t colview[FEC_MAXMATRIX1D];
 	uint32_t row, col;
 };
 
@@ -31,6 +33,8 @@ struct fecMatrixFlag gMatFlag;
 void fecmatflag_blockset(struct fecMatrixFlag *flag, int rowy, int colx)
 {
 	flag->blocks[rowy] |= (1 << colx);
+	flag->rowview[rowy] |= (1 << colx);
+	flag->colview[colx] |= (1 << rowy);
 }
 
 int fecmatflag_blockget(struct fecMatrixFlag *flag, int rowy, int colx)
@@ -53,6 +57,8 @@ void fecmatflag_print(struct fecMatrixFlag *flag, int dmatrix)
 	printf("matflag:row[0x%08X], col[0x%08X]\n", flag->row, flag->col);
 	for (int i = 0; i <= dmatrix; i++) {
 		printf("blocks[row:%02d]=0x%08X\n", i, flag->blocks[i]);
+		printf("rowview[%02d]=0x%08X\n", i, flag->rowview[i]);
+		printf("colview[%02d]=0x%08X\n", i, flag->colview[i]);
 	}
 }
 
@@ -181,7 +187,7 @@ int fec_loadbuf(uint8_t *buf, int hFile, int blocksize, int dmatrix)
 	return 0;
 }
 
-void fec_injecterror(uint8_t *buf, int blocksize, int dmatrix)
+void fec_injecterror(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag *matFlag)
 {
 	uint16_t iRand;
 	int colx, rowy;
@@ -203,6 +209,7 @@ void fec_injecterror(uint8_t *buf, int blocksize, int dmatrix)
 		} else {
 			printf("RDSeed Failed\n");
 		}
+		fecmatflag_blockset(matFlag, rowy, colx);
 		printf(" injected error at rowy[%d], colx[%d], i[%d] = 0x%X\n", rowy, colx, i, iRand);
 	}
 }
@@ -232,7 +239,7 @@ int main(int argc, char **argv)
 		fec_genfec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
 		fec_printbuf_start(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
 		write(hFDst, buf, FEC_BUFFERSIZE);
-		fec_injecterror(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
+		fec_injecterror(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D, &gMatFlag);
 		fec_checkfec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D, &gMatFlag);
 		fecmatflag_print(&gMatFlag, FEC_DATAMATRIX1D);
 		iMatrix += 1;
