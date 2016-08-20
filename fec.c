@@ -16,28 +16,42 @@
 #define FEC_MAXMATRIX1D 32
 
 // this structure tells if a given block in the fec buffer is valid or not
-// the bits with in each row correspond to the columns with in that row.
+// the bits with in each blocks[index] correspond to the columns with in that row.
 // So for now this allows a 32x32 fec matrix (including both data and fec)
 // NOTE: row and column are numbered starting from 0
 
 struct fecMatrixFlag {
-	uint32_t row[FEC_MAXMATRIX1D];
+	uint32_t blocks[FEC_MAXMATRIX1D];
+	uint32_t row, col;
 };
 
-void fecmatflag_set(struct fecMatrixFlag *flag, int rowy, int colx)
+struct fecMatrixFlag gMatFlag;
+
+void fecmatflag_blockset(struct fecMatrixFlag *flag, int rowy, int colx)
 {
-	flag->row[rowy] |= (1 << colx);
+	flag->blocks[rowy] |= (1 << colx);
 }
 
-int fecmatflag_get(struct fecMatrixFlag *flag, int rowy, int colx)
+int fecmatflag_blockget(struct fecMatrixFlag *flag, int rowy, int colx)
 {
-	return (flag->row[rowy] & (1 << colx));
+	return (flag->blocks[rowy] & (1 << colx));
+}
+
+void fecmatflag_rowset(struct fecMatrixFlag *flag, int rowy)
+{
+	flag->row |= (1 << rowy);
+}
+
+void fecmatflag_colset(struct fecMatrixFlag *flag, int colx)
+{
+	flag->col |= (1 << colx);
 }
 
 void fecmatflag_print(struct fecMatrixFlag *flag, int dmatrix)
 {
+	printf("matflag:row[0x%08X], col[0x%08X]\n", flag->row, flag->col);
 	for (int i = 0; i <= dmatrix; i++) {
-		printf("%x\n", flag->row[i]);
+		printf("blocks[row:%02d]=0x%08X\n", i, flag->blocks[i]);
 	}
 }
 
@@ -106,7 +120,7 @@ void fec_genfec(uint8_t *buf, int blocksize, int matrix)
 	}
 }
 
-void fec_checkfec(uint8_t *buf, int blocksize, int matrix)
+void fec_checkfec(uint8_t *buf, int blocksize, int matrix, struct fecMatrixFlag *matFlag)
 {
 	__m128i res, val;
 	int iCurRowOffset;
@@ -129,6 +143,7 @@ void fec_checkfec(uint8_t *buf, int blocksize, int matrix)
 			iRes = v4i32[0] + v4i32[1] + v4i32[2] + v4i32[3];
 			if (iRes != 0) {
 				printf("FEC:WARN:Y=Row=%d Not Valid\n",y);
+				fecmatflag_rowset(matFlag, y);
 			}
 		}
 	}
@@ -145,6 +160,7 @@ void fec_checkfec(uint8_t *buf, int blocksize, int matrix)
 			iRes = p32Res[0] + p32Res[1] + p32Res[2] + p32Res[3];
 			if (iRes != 0) {
 				printf("FEC:WARN:X=Col=%d Not Valid\n",x);
+				fecmatflag_colset(matFlag, x);
 			}
 		}
 	}
@@ -189,7 +205,8 @@ int main(int argc, char **argv)
 		fec_genfec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
 		fec_printbuf_start(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
 		write(hFDst, buf, FEC_BUFFERSIZE);
-		fec_checkfec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
+		fec_checkfec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D, &gMatFlag);
+		fecmatflag_print(&gMatFlag, FEC_DATAMATRIX1D);
 		iMatrix += 1;
 	}
 	return 0;
