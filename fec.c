@@ -55,7 +55,7 @@ void fecmatflag_print(struct fecMatrixFlag *flag, int dmatrix)
 	}
 }
 
-int fec_validmeta(int blocksize, int matrix)
+int fec_validmeta(int blocksize, int dmatrix)
 {
 	if ((blocksize % 16) != 0) {
 		return -1;
@@ -73,13 +73,13 @@ void m128i_print(__m128i vVal)
 	}
 }
 
-void fec_printbuf_start(uint8_t *buf, int blocksize, int matrix)
+void fec_printbuf_start(uint8_t *buf, int blocksize, int dmatrix)
 {
 	__m128i val;
-	for(int x = 0; x <= matrix; x++) {
-		for(int y = 0; y <= matrix; y++) {
+	for(int x = 0; x <= dmatrix; x++) {
+		for(int y = 0; y <= dmatrix; y++) {
 			for(int i = 0; i < blocksize; i+= 2048) {
-				val = _mm_loadu_si128((__m128i*)&buf[y*(matrix+1)*blocksize+x*blocksize+i]);
+				val = _mm_loadu_si128((__m128i*)&buf[y*(dmatrix+1)*blocksize+x*blocksize+i]);
 				printf("FEC:INFO:X[%d],Y[%d],I[%4d]: ", x, y, i);
 				m128i_print(val);
 				printf("\n");
@@ -90,37 +90,37 @@ void fec_printbuf_start(uint8_t *buf, int blocksize, int matrix)
 
 // Row major 2D matrix
 // Note2Self: X = Col, Y = Row
-void fec_genfec(uint8_t *buf, int blocksize, int matrix)
+void fec_genfec(uint8_t *buf, int blocksize, int dmatrix)
 {
 	__m128i res, val;
 	int iCurRowOffset;
 
 	// Handle fec for each row of data blocks
-	for(int y = 0; y < matrix; y++) {
-		iCurRowOffset = y*(matrix+1)*blocksize;
+	for(int y = 0; y < dmatrix; y++) {
+		iCurRowOffset = y*(dmatrix+1)*blocksize;
 		for(int i = 0; i < blocksize; i+= 16) {
 			res = _mm_setzero_si128();
-			for(int x = 0; x < matrix; x++) {
+			for(int x = 0; x < dmatrix; x++) {
 				val = _mm_loadu_si128((__m128i*)&buf[iCurRowOffset+x*blocksize+i]);
 				res = _mm_xor_si128(res, val);
 			}
-			_mm_storeu_si128((__m128i*)&buf[iCurRowOffset+matrix*blocksize+i], res);
+			_mm_storeu_si128((__m128i*)&buf[iCurRowOffset+dmatrix*blocksize+i], res);
 		}
 	}
 	// handle fec for each column of data blocks
-	for(int x = 0; x < matrix; x++) {
+	for(int x = 0; x < dmatrix; x++) {
 		for(int i = 0; i < blocksize; i+= 16) {
 			res = _mm_setzero_si128();
-			for(int y = 0; y < matrix; y++) {
-				val = _mm_loadu_si128((__m128i*)&buf[y*(matrix+1)*blocksize+x*blocksize+i]);
+			for(int y = 0; y < dmatrix; y++) {
+				val = _mm_loadu_si128((__m128i*)&buf[y*(dmatrix+1)*blocksize+x*blocksize+i]);
 				res = _mm_xor_si128(res, val);
 			}
-			_mm_storeu_si128((__m128i*)&buf[matrix*(matrix+1)*blocksize+x*blocksize+i], res);
+			_mm_storeu_si128((__m128i*)&buf[dmatrix*(dmatrix+1)*blocksize+x*blocksize+i], res);
 		}
 	}
 }
 
-void fec_checkfec(uint8_t *buf, int blocksize, int matrix, struct fecMatrixFlag *matFlag)
+void fec_checkfec(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag *matFlag)
 {
 	__m128i res, val;
 	int iCurRowOffset;
@@ -128,11 +128,11 @@ void fec_checkfec(uint8_t *buf, int blocksize, int matrix, struct fecMatrixFlag 
 	uint32_t iRes, *p32Res;
 
 	// Handle fec for each row of data blocks
-	for(int y = 0; y <= matrix; y++) {
-		iCurRowOffset = y*(matrix+1)*blocksize;
+	for(int y = 0; y <= dmatrix; y++) {
+		iCurRowOffset = y*(dmatrix+1)*blocksize;
 		for(int i = 0; i < blocksize; i+= 16) {
 			res = _mm_setzero_si128();
-			for(int x = 0; x <= matrix; x++) {
+			for(int x = 0; x <= dmatrix; x++) {
 				val = _mm_loadu_si128((__m128i*)&buf[iCurRowOffset+x*blocksize+i]);
 				res = _mm_xor_si128(res, val);
 			}
@@ -148,11 +148,11 @@ void fec_checkfec(uint8_t *buf, int blocksize, int matrix, struct fecMatrixFlag 
 		}
 	}
 	// handle fec for each column of data blocks
-	for(int x = 0; x <= matrix; x++) {
+	for(int x = 0; x <= dmatrix; x++) {
 		for(int i = 0; i < blocksize; i+= 16) {
 			res = _mm_setzero_si128();
-			for(int y = 0; y <= matrix; y++) {
-				val = _mm_loadu_si128((__m128i*)&buf[y*(matrix+1)*blocksize+x*blocksize+i]);
+			for(int y = 0; y <= dmatrix; y++) {
+				val = _mm_loadu_si128((__m128i*)&buf[y*(dmatrix+1)*blocksize+x*blocksize+i]);
 				res = _mm_xor_si128(res, val);
 			}
 			//iRes = res.m128i_i32[0] + res.m128i_i32[1];
@@ -166,13 +166,13 @@ void fec_checkfec(uint8_t *buf, int blocksize, int matrix, struct fecMatrixFlag 
 	}
 }
 
-int fec_loadbuf(uint8_t *buf, int hFile, int blocksize, int matrix)
+int fec_loadbuf(uint8_t *buf, int hFile, int blocksize, int dmatrix)
 {
 	int iRead;
 	int iCurRowOffset;
-	int iBufSizeDataRow = matrix*blocksize;
-	for(int y = 0; y < matrix; y++) {
-		iCurRowOffset = y*(matrix+1)*blocksize;
+	int iBufSizeDataRow = dmatrix*blocksize;
+	for(int y = 0; y < dmatrix; y++) {
+		iCurRowOffset = y*(dmatrix+1)*blocksize;
 		iRead = read(hFile, &buf[iCurRowOffset], iBufSizeDataRow);
 		if (iRead != iBufSizeDataRow)
 			return -1;
