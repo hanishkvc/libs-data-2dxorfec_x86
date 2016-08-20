@@ -54,11 +54,11 @@ void fecmatflag_colset(struct fecMatrixFlag *flag, int colx)
 
 void fecmatflag_print(struct fecMatrixFlag *flag, int dmatrix)
 {
-	printf("matflag:row[0x%08X], col[0x%08X]\n", flag->row, flag->col);
+	printf("FEC:INFO:matflag:row[0x%08X], col[0x%08X]\n", flag->row, flag->col);
 	for (int i = 0; i <= dmatrix; i++) {
-		printf("blocks[row:%02d]=0x%08X\n", i, flag->blocks[i]);
-		printf("rowview[%02d]=0x%08X\n", i, flag->rowview[i]);
-		printf("colview[%02d]=0x%08X\n", i, flag->colview[i]);
+		printf("FEC:INFO:blocks[row:%02d]=0x%08X\n", i, flag->blocks[i]);
+		printf("FEC:INFO:   rowview[%02d]=0x%08X\n", i, flag->rowview[i]);
+		printf("FEC:INFO:   colview[%02d]=0x%08X\n", i, flag->colview[i]);
 	}
 }
 
@@ -83,11 +83,11 @@ void m128i_print(__m128i vVal)
 void fec_printbuf_start(uint8_t *buf, int blocksize, int dmatrix)
 {
 	__m128i val;
-	for(int x = 0; x <= dmatrix; x++) {
-		for(int y = 0; y <= dmatrix; y++) {
+	for(int colx = 0; colx <= dmatrix; colx++) {
+		for(int rowy = 0; rowy <= dmatrix; rowy++) {
 			for(int i = 0; i < blocksize; i+= 2048) {
-				val = _mm_loadu_si128((__m128i*)&buf[y*(dmatrix+1)*blocksize+x*blocksize+i]);
-				printf("FEC:INFO:X[%d],Y[%d],I[%4d]: ", x, y, i);
+				val = _mm_loadu_si128((__m128i*)&buf[rowy*(dmatrix+1)*blocksize+colx*blocksize+i]);
+				printf("FEC:INFO:COLX[%d],ROWY[%d],I[%4d]: ", colx, rowy, i);
 				m128i_print(val);
 				printf("\n");
 			}
@@ -103,26 +103,26 @@ void fec_genfec(uint8_t *buf, int blocksize, int dmatrix)
 	int iCurRowOffset;
 
 	// Handle fec for each row of data blocks
-	for(int y = 0; y < dmatrix; y++) {
-		iCurRowOffset = y*(dmatrix+1)*blocksize;
+	for(int rowy = 0; rowy < dmatrix; rowy++) {
+		iCurRowOffset = rowy*(dmatrix+1)*blocksize;
 		for(int i = 0; i < blocksize; i+= 16) {
 			res = _mm_setzero_si128();
-			for(int x = 0; x < dmatrix; x++) {
-				val = _mm_loadu_si128((__m128i*)&buf[iCurRowOffset+x*blocksize+i]);
+			for(int colx = 0; colx < dmatrix; colx++) {
+				val = _mm_loadu_si128((__m128i*)&buf[iCurRowOffset+colx*blocksize+i]);
 				res = _mm_xor_si128(res, val);
 			}
 			_mm_storeu_si128((__m128i*)&buf[iCurRowOffset+dmatrix*blocksize+i], res);
 		}
 	}
 	// handle fec for each column of data blocks
-	for(int x = 0; x < dmatrix; x++) {
+	for(int colx = 0; colx < dmatrix; colx++) {
 		for(int i = 0; i < blocksize; i+= 16) {
 			res = _mm_setzero_si128();
-			for(int y = 0; y < dmatrix; y++) {
-				val = _mm_loadu_si128((__m128i*)&buf[y*(dmatrix+1)*blocksize+x*blocksize+i]);
+			for(int rowy = 0; rowy < dmatrix; rowy++) {
+				val = _mm_loadu_si128((__m128i*)&buf[rowy*(dmatrix+1)*blocksize+colx*blocksize+i]);
 				res = _mm_xor_si128(res, val);
 			}
-			_mm_storeu_si128((__m128i*)&buf[dmatrix*(dmatrix+1)*blocksize+x*blocksize+i], res);
+			_mm_storeu_si128((__m128i*)&buf[dmatrix*(dmatrix+1)*blocksize+colx*blocksize+i], res);
 		}
 	}
 }
@@ -135,12 +135,12 @@ void fec_checkfec(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag
 	uint32_t iRes, *p32Res;
 
 	// Handle fec for each row of data blocks
-	for(int y = 0; y <= dmatrix; y++) {
-		iCurRowOffset = y*(dmatrix+1)*blocksize;
+	for(int rowy = 0; rowy <= dmatrix; rowy++) {
+		iCurRowOffset = rowy*(dmatrix+1)*blocksize;
 		for(int i = 0; i < blocksize; i+= 16) {
 			res = _mm_setzero_si128();
-			for(int x = 0; x <= dmatrix; x++) {
-				val = _mm_loadu_si128((__m128i*)&buf[iCurRowOffset+x*blocksize+i]);
+			for(int colx = 0; colx <= dmatrix; colx++) {
+				val = _mm_loadu_si128((__m128i*)&buf[iCurRowOffset+colx*blocksize+i]);
 				res = _mm_xor_si128(res, val);
 			}
 #ifdef FORCE_ERROR
@@ -149,25 +149,25 @@ void fec_checkfec(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag
 			v4i32 = (__v4si)res;
 			iRes = v4i32[0] + v4i32[1] + v4i32[2] + v4i32[3];
 			if (iRes != 0) {
-				printf("FEC:WARN:Y=Row=%d Not Valid\n",y);
-				fecmatflag_rowset(matFlag, y);
+				printf("FEC:WARN:ROWY=%d Not Valid\n", rowy);
+				fecmatflag_rowset(matFlag, rowy);
 			}
 		}
 	}
 	// handle fec for each column of data blocks
-	for(int x = 0; x <= dmatrix; x++) {
+	for(int colx = 0; colx <= dmatrix; colx++) {
 		for(int i = 0; i < blocksize; i+= 16) {
 			res = _mm_setzero_si128();
-			for(int y = 0; y <= dmatrix; y++) {
-				val = _mm_loadu_si128((__m128i*)&buf[y*(dmatrix+1)*blocksize+x*blocksize+i]);
+			for(int rowy = 0; rowy <= dmatrix; rowy++) {
+				val = _mm_loadu_si128((__m128i*)&buf[rowy*(dmatrix+1)*blocksize+colx*blocksize+i]);
 				res = _mm_xor_si128(res, val);
 			}
 			//iRes = res.m128i_i32[0] + res.m128i_i32[1];
 			p32Res = (uint32_t*)&res;
 			iRes = p32Res[0] + p32Res[1] + p32Res[2] + p32Res[3];
 			if (iRes != 0) {
-				printf("FEC:WARN:X=Col=%d Not Valid\n",x);
-				fecmatflag_colset(matFlag, x);
+				printf("FEC:WARN:COLX=%d Not Valid\n", colx);
+				fecmatflag_colset(matFlag, colx);
 			}
 		}
 	}
@@ -178,8 +178,8 @@ int fec_loadbuf(uint8_t *buf, int hFile, int blocksize, int dmatrix)
 	int iRead;
 	int iCurRowOffset;
 	int iBufSizeDataRow = dmatrix*blocksize;
-	for(int y = 0; y < dmatrix; y++) {
-		iCurRowOffset = y*(dmatrix+1)*blocksize;
+	for(int rowy = 0; rowy < dmatrix; rowy++) {
+		iCurRowOffset = rowy*(dmatrix+1)*blocksize;
 		iRead = read(hFile, &buf[iCurRowOffset], iBufSizeDataRow);
 		if (iRead != iBufSizeDataRow)
 			return -1;
