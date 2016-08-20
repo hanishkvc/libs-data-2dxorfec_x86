@@ -37,6 +37,13 @@ void fecmatflag_blockset(struct fecMatrixFlag *flag, int rowy, int colx)
 	flag->colview[colx] |= (1 << rowy);
 }
 
+void fecmatflag_blockclear(struct fecMatrixFlag *flag, int rowy, int colx)
+{
+	flag->blocks[rowy] &= ~(1 << colx);
+	flag->rowview[rowy] &= ~(1 << colx);
+	flag->colview[colx] &= ~(1 << rowy);
+}
+
 int fecmatflag_blockget(struct fecMatrixFlag *flag, int rowy, int colx)
 {
 	return (flag->blocks[rowy] & (1 << colx));
@@ -173,6 +180,58 @@ void fec_checkfec(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag
 	}
 }
 
+void fec_recover(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag *matFlag)
+{
+	int iNumErrBlocks, iErrCol, iErrRow;
+	int iContinue, iDone;
+	int iTryCnt;
+
+	iTryCnt = 0;
+	iDone = 1;
+	iContinue = 1;
+	while(iContinue) {
+		printf("FEC:INFO:Recover: Take [%d] at recovery...\n", iTryCnt);
+		iDone = 1;
+		iContinue = 0;
+		for (int i = 0; i < dmatrix; i++) {
+			iNumErrBlocks = _mm_popcnt_u32(matFlag->rowview[i]);
+			if (iNumErrBlocks == 0) {
+				printf("FEC:INFO:GOOD:NO ERRBLOCKS: row[%d]\n", i);
+			}
+			if (iNumErrBlocks == 1) {
+				iContinue = 1;
+				printf("FEC:INFO:  OK:ONE ERRBLOCKS: row[%d]\n", i);
+				iErrCol = __bsfd(matFlag->rowview[i]);
+				printf("FEC:INFO: recovering err block at rowy[%d], colx[%d]\n", i, iErrCol);
+				fecmatflag_blockclear(matFlag, i, iErrCol);
+			}
+			if (iNumErrBlocks > 1) {
+				printf("FEC:INFO: BAD:MANY ERRBLOCKS: row[%d]\n", i);
+				iDone = 0;
+			}
+		}
+		for (int i = 0; i < dmatrix; i++) {
+			iNumErrBlocks = _mm_popcnt_u32(matFlag->colview[i]);
+			if (iNumErrBlocks == 0) {
+				printf("FEC:INFO:GOOD:NO ERRBLOCKS: col[%d]\n", i);
+			}
+			if (iNumErrBlocks == 1) {
+				iContinue = 1;
+				printf("FEC:INFO:  OK:ONE ERRBLOCKS: col[%d]\n", i);
+				iErrRow = __bsfd(matFlag->colview[i]);
+				printf("FEC:INFO: recovering err block at rowy[%d], colx[%d]\n", iErrRow, i);
+				fecmatflag_blockclear(matFlag, iErrRow, i);
+			}
+			if (iNumErrBlocks > 1) {
+				printf("FEC:INFO: BAD:MANY ERRBLOCKS: col[%d]\n", i);
+				iDone = 0;
+			}
+		}
+		printf("FEC:INFO:Recover: iDone[%d], iContinue[%d]\n", iDone, iContinue);
+		iTryCnt += 1;
+	}
+}
+
 int fec_loadbuf(uint8_t *buf, int hFile, int blocksize, int dmatrix)
 {
 	int iRead;
@@ -242,6 +301,7 @@ int main(int argc, char **argv)
 		fec_injecterror(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D, &gMatFlag);
 		fec_checkfec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D, &gMatFlag);
 		fecmatflag_print(&gMatFlag, FEC_DATAMATRIX1D);
+		fec_recover(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D, &gMatFlag);
 		iMatrix += 1;
 	}
 	return 0;
