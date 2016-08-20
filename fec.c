@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <emmintrin.h>
+#include <x86intrin.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -180,6 +181,32 @@ int fec_loadbuf(uint8_t *buf, int hFile, int blocksize, int dmatrix)
 	return 0;
 }
 
+void fec_injecterror(uint8_t *buf, int blocksize, int dmatrix)
+{
+	uint16_t iRand;
+	int colx, rowy;
+
+	for(int i = 0; i < 3; i++) {
+		printf("FEC:INFO: injecting error [%d]:",i);
+		if (_rdseed16_step(&iRand)) {
+			colx = iRand % (dmatrix+1);
+		} else {
+			printf("RDSeed Failed\n");
+		}
+		if (_rdseed16_step(&iRand)) {
+			rowy = iRand % (dmatrix+1);
+		} else {
+			printf("RDSeed Failed\n");
+		}
+		if (_rdseed16_step(&iRand)) {
+			buf[rowy*(dmatrix+1)*blocksize+colx*blocksize+i] = iRand;
+		} else {
+			printf("RDSeed Failed\n");
+		}
+		printf(" injected error at rowy[%d], colx[%d], i[%d] = 0x%X\n", rowy, colx, i, iRand);
+	}
+}
+
 int main(int argc, char **argv)
 {
 
@@ -205,6 +232,7 @@ int main(int argc, char **argv)
 		fec_genfec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
 		fec_printbuf_start(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
 		write(hFDst, buf, FEC_BUFFERSIZE);
+		fec_injecterror(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
 		fec_checkfec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D, &gMatFlag);
 		fecmatflag_print(&gMatFlag, FEC_DATAMATRIX1D);
 		iMatrix += 1;
