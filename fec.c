@@ -315,6 +315,32 @@ int fec_loadbuf(uint8_t *buf, int hFile, int blocksize, int dmatrix, int mode)
 	return 0;
 }
 
+int fec_storebuf(uint8_t *buf, int hFile, int blocksize, int dmatrix, int mode)
+{
+	int iWrote;
+	int iCurRowOffset;
+	int iBufSizeDataOnlyRow = dmatrix*blocksize;
+	int iBufSizeDataFecRow = (dmatrix+1)*blocksize;
+	int iBufSizeForRow = 0;
+	int iRowCount = 0;
+
+	if (mode == FEC_BUFFILE_DATAONLY) {
+		iBufSizeForRow = iBufSizeDataOnlyRow;
+		iRowCount = dmatrix;
+	} else {
+		iBufSizeForRow = iBufSizeDataFecRow;
+		iRowCount = dmatrix+1;
+	}
+
+	for(int rowy = 0; rowy < iRowCount; rowy++) {
+		iCurRowOffset = rowy*(dmatrix+1)*blocksize;
+		iWrote = write(hFile, &buf[iCurRowOffset], iBufSizeForRow);
+		if (iWrote != iBufSizeForRow)
+			return -1;
+	}
+	return 0;
+}
+
 void fec_injecterror(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag *matFlag)
 {
 	uint16_t iRand;
@@ -344,6 +370,7 @@ void fec_injecterror(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixF
 
 #define FEC_PRGMODE_GENFEC 0
 #define FEC_PRGMODE_USEFEC 1
+#define FEC_PRGMODE_ALLFEC 2
 
 int test_genfec(int hFSrc, int hFDst)
 {
@@ -363,7 +390,12 @@ int test_genfec(int hFSrc, int hFDst)
 		fec_printbuf_start(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
 		fec_genfec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
 		fec_printbuf_start(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
-		write(hFDst, buf, FEC_BUFFERSIZE);
+		if (fec_storebuf(buf, hFDst, FEC_BLOCKSIZE, FEC_DATAMATRIX1D, FEC_BUFFILE_DATAFEC) != 0) {
+			printf("FEC:INFO: failed storing of data+fec matrix [%d], maybe EOF, quiting...\n", iMatrix);
+			return -1;
+		} else {
+			printf("FEC:INFO: stored data+fec matrix [%d]\n", iMatrix);
+		}
 		iMatrix += 1;
 	}
 	return 0;
@@ -389,6 +421,12 @@ int test_usefec(int hFSrc, int hFDst)
 		fec_checkfec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D, &gMatFlag);
 		fecmatflag_print(&gMatFlag, FEC_DATAMATRIX1D);
 		fec_recover(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D, &gMatFlag);
+		if (fec_storebuf(buf, hFDst, FEC_BLOCKSIZE, FEC_DATAMATRIX1D, FEC_BUFFILE_DATAONLY) != 0) {
+			printf("FEC:INFO: failed storing of data matrix [%d], maybe EOF, quiting...\n", iMatrix);
+			return -1;
+		} else {
+			printf("FEC:INFO: stored data matrix [%d]\n", iMatrix);
+		}
 		iMatrix += 1;
 	}
 	return 0;
@@ -430,7 +468,11 @@ int main(int argc, char **argv)
 	if (strncmp(argv[1], "gen",3) == 0) {
 		iMode = FEC_PRGMODE_GENFEC;
 	} else {
-		iMode = FEC_PRGMODE_USEFEC;
+		if (strncmp(argv[1], "use",3) == 0) {
+			iMode = FEC_PRGMODE_USEFEC;
+		} else {
+			iMode = FEC_PRGMODE_ALLFEC;
+		}
 	}
 	hFSrc = open(argv[2],O_RDONLY);
 	hFDst = open(argv[3],O_CREAT | O_WRONLY);
