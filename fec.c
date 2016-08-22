@@ -150,6 +150,53 @@ void fec_genfec(uint8_t *buf, int blocksize, int dmatrix)
 	}
 }
 
+void fec_weakcrosscheck_amongflags(struct fecMatrixFlag *matFlag, int dmatrix)
+{
+	uint32_t uBitPos;
+	uint32_t curRowSet, curColSet;
+	uint32_t curRowSetCnt, curColSetCnt;
+	int iErrorOrDebug = 0;
+
+	for(int i = 0; i <= dmatrix; i++) {
+		uBitPos = (1 << i);
+		// Check along row
+		curRowSet = matFlag->row & uBitPos;
+		curRowSetCnt = _mm_popcnt_u32(matFlag->rowview[i]);
+		if (curRowSet) {
+			if (curRowSetCnt == 0) {
+				iErrorOrDebug = 1;
+				printf("FEC:ERROR: checkfec says row[%d] has error, but rowview[%d] doesnt have any bit set\n", i, i);
+			}
+		}
+		if (curRowSetCnt != 0) {
+			if (curRowSet == 0) {
+				iErrorOrDebug = 1;
+				printf("FEC:DEBUG: rowview[%d] has bits set, but checkfec didnt find error: Either cyclical complementing errors present, which cant be detected at global level OR bug in checkfec?\n", i);
+			}
+		}
+		// Check along col
+		curColSet = matFlag->col & uBitPos;
+		curColSetCnt = _mm_popcnt_u32(matFlag->colview[i]);
+		if (curColSet) {
+			if (curColSetCnt == 0) {
+				iErrorOrDebug = 1;
+				printf("FEC:ERROR: checkfec says col[%d] has error, but colview[%d] doesnt have any bit set\n", i, i);
+			}
+		}
+		if (curColSetCnt != 0) {
+			if (curColSet == 0) {
+				iErrorOrDebug = 1;
+				printf("FEC:DEBUG: colview[%d] has bits set, but checkfec didnt find error: Either cyclical complementing errors present, which cant be detected at global level OR bug in checkfec?\n", i);
+			}
+		}
+	}
+	if (iErrorOrDebug == 0) {
+		printf("FEC:GOOD:weakcrosscheck: Didn't find any issues, but remember this is a weak check, some complementing errors can slip through\n");
+	} else {
+		printf("FEC:GOOD:weakcrosscheck: Found issues, but remember this is a weak check, some complementing errors can confuse the logic\n");
+	}
+}
+
 void fec_checkfec(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag *matFlag)
 {
 	__m128i res, val;
@@ -194,6 +241,9 @@ void fec_checkfec(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag
 			}
 		}
 	}
+
+	// Cross check between error block flags set by user program and Global error identification above
+	fec_weakcrosscheck_amongflags(matFlag, dmatrix);
 }
 
 #define FEC_RECOVER_ALONGROW 0
