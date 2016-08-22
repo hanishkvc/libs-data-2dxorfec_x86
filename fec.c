@@ -216,7 +216,18 @@ void fec_recoverblock(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrix
 			}
 			_mm_storeu_si128((__m128i*)&buf[iCurRowOffset+errBlockColX*blocksize+i], res);
 		}
-	} else {
+	} else {		// FEC_RECOVER_ALONGCOL
+		for(int i = 0; i < blocksize; i+= 16) {
+			res = _mm_setzero_si128();
+			for(int rowy = 0; rowy <= dmatrix; rowy++) {
+				if (rowy == errBlockRowY) {
+					continue;
+				}
+				val = _mm_loadu_si128((__m128i*)&buf[rowy*(dmatrix+1)*blocksize+errBlockColX*blocksize+i]);
+				res = _mm_xor_si128(res, val);
+			}
+			_mm_storeu_si128((__m128i*)&buf[errBlockRowY*(dmatrix+1)*blocksize+errBlockColX*blocksize+i], res);
+		}
 	}
 	fecmatflag_blockclear(matFlag, errBlockRowY, errBlockColX);
 }
