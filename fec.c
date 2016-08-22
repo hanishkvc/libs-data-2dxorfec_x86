@@ -204,8 +204,8 @@ void fec_checkfec(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag
 	__v4si v4i32;
 	uint32_t iRes, *p32Res;
 
-	// Handle fec for each row of data blocks
-	for(int rowy = 0; rowy <= dmatrix; rowy++) {
+	// Check fec for each row of data blocks
+	for(int rowy = 0; rowy < dmatrix; rowy++) {
 		iCurRowOffset = rowy*(dmatrix+1)*blocksize;
 		for(int i = 0; i < blocksize; i+= 16) {
 			res = _mm_setzero_si128();
@@ -224,8 +224,8 @@ void fec_checkfec(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag
 			}
 		}
 	}
-	// handle fec for each column of data blocks
-	for(int colx = 0; colx <= dmatrix; colx++) {
+	// Check fec for each column of data blocks
+	for(int colx = 0; colx < dmatrix; colx++) {
 		for(int i = 0; i < blocksize; i+= 16) {
 			res = _mm_setzero_si128();
 			for(int rowy = 0; rowy <= dmatrix; rowy++) {
