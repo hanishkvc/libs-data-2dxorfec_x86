@@ -286,15 +286,30 @@ void fec_recover(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag 
 	}
 }
 
-int fec_loadbuf(uint8_t *buf, int hFile, int blocksize, int dmatrix)
+#define FEC_BUFFILE_DATAONLY 0
+#define FEC_BUFFILE_DATAFEC 1
+
+int fec_loadbuf(uint8_t *buf, int hFile, int blocksize, int dmatrix, int mode)
 {
 	int iRead;
 	int iCurRowOffset;
-	int iBufSizeDataRow = dmatrix*blocksize;
-	for(int rowy = 0; rowy < dmatrix; rowy++) {
+	int iBufSizeDataOnlyRow = dmatrix*blocksize;
+	int iBufSizeDataFecRow = (dmatrix+1)*blocksize;
+	int iBufSizeForRow = 0;
+	int iRowCount = 0;
+
+	if (mode == FEC_BUFFILE_DATAONLY) {
+		iBufSizeForRow = iBufSizeDataOnlyRow;
+		iRowCount = dmatrix;
+	} else {
+		iBufSizeForRow = iBufSizeDataFecRow;
+		iRowCount = dmatrix+1;
+	}
+
+	for(int rowy = 0; rowy < iRowCount; rowy++) {
 		iCurRowOffset = rowy*(dmatrix+1)*blocksize;
-		iRead = read(hFile, &buf[iCurRowOffset], iBufSizeDataRow);
-		if (iRead != iBufSizeDataRow)
+		iRead = read(hFile, &buf[iCurRowOffset], iBufSizeForRow);
+		if (iRead != iBufSizeForRow)
 			return -1;
 	}
 	return 0;
@@ -327,22 +342,68 @@ void fec_injecterror(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixF
 	}
 }
 
-int main(int argc, char **argv)
+#define FEC_PRGMODE_GENFEC 0
+#define FEC_PRGMODE_USEFEC 1
+
+int test_genfec(int hFSrc, int hFDst)
 {
-
 	uint8_t buf[FEC_BUFFERSIZE];
-
-	int hFSrc, hFDst;
 	int iMatrix;
 
 	memset(buf, 0, FEC_BUFFERSIZE);
-	hFSrc = open(argv[1],O_RDONLY);
-	hFDst = open(argv[2],O_CREAT | O_WRONLY);
-
 	iMatrix = 0;
 	while(1) {
 		printf("FEC:INFO: processing data matrix [%d]\n", iMatrix);
-		if (fec_loadbuf(buf, hFSrc, FEC_BLOCKSIZE, FEC_DATAMATRIX1D) != 0) {
+		if (fec_loadbuf(buf, hFSrc, FEC_BLOCKSIZE, FEC_DATAMATRIX1D, FEC_BUFFILE_DATAONLY) != 0) {
+			printf("FEC:INFO: failed loading of data matrix [%d], maybe EOF, quiting...\n", iMatrix);
+			return -1;
+		} else {
+			printf("FEC:INFO: loaded data matrix [%d]\n", iMatrix);
+		}
+		fec_printbuf_start(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
+		fec_genfec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
+		fec_printbuf_start(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
+		write(hFDst, buf, FEC_BUFFERSIZE);
+		iMatrix += 1;
+	}
+	return 0;
+}
+
+int test_usefec(int hFSrc, int hFDst)
+{
+	uint8_t buf[FEC_BUFFERSIZE];
+	int iMatrix;
+
+	memset(buf, 0, FEC_BUFFERSIZE);
+	iMatrix = 0;
+	while(1) {
+		printf("FEC:INFO: processing data+fec matrix [%d]\n", iMatrix);
+		if (fec_loadbuf(buf, hFSrc, FEC_BLOCKSIZE, FEC_DATAMATRIX1D, FEC_BUFFILE_DATAFEC) != 0) {
+			printf("FEC:INFO: failed loading of data+fec matrix [%d], maybe EOF, quiting...\n", iMatrix);
+			return -1;
+		} else {
+			printf("FEC:INFO: loaded data+fec matrix [%d]\n", iMatrix);
+		}
+		fec_printbuf_start(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D);
+		fec_injecterror(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D, &gMatFlag);
+		fec_checkfec(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D, &gMatFlag);
+		fecmatflag_print(&gMatFlag, FEC_DATAMATRIX1D);
+		fec_recover(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D, &gMatFlag);
+		iMatrix += 1;
+	}
+	return 0;
+}
+
+int test_all(int hFSrc, int hFDst)
+{
+	uint8_t buf[FEC_BUFFERSIZE];
+	int iMatrix;
+
+	memset(buf, 0, FEC_BUFFERSIZE);
+	iMatrix = 0;
+	while(1) {
+		printf("FEC:INFO: processing data matrix [%d]\n", iMatrix);
+		if (fec_loadbuf(buf, hFSrc, FEC_BLOCKSIZE, FEC_DATAMATRIX1D, FEC_BUFFILE_DATAONLY) != 0) {
 			printf("FEC:INFO: failed loading of data matrix [%d], maybe EOF, quiting...\n", iMatrix);
 			break;
 		} else {
@@ -358,6 +419,34 @@ int main(int argc, char **argv)
 		fec_recover(buf, FEC_BLOCKSIZE, FEC_DATAMATRIX1D, &gMatFlag);
 		iMatrix += 1;
 	}
+	return 0;
+}
+
+int main(int argc, char **argv)
+{
+	int hFSrc, hFDst;
+	int iMode;
+
+	if (strncmp(argv[1], "gen",3) == 0) {
+		iMode = FEC_PRGMODE_GENFEC;
+	} else {
+		iMode = FEC_PRGMODE_USEFEC;
+	}
+	hFSrc = open(argv[2],O_RDONLY);
+	hFDst = open(argv[3],O_CREAT | O_WRONLY);
+
+
+	switch(iMode) {
+		case FEC_PRGMODE_GENFEC:
+			test_genfec(hFSrc, hFDst);
+			break;
+		case FEC_PRGMODE_USEFEC:
+			test_usefec(hFSrc, hFDst);
+			break;
+		default:
+			test_all(hFSrc, hFDst);
+	}
+
 	return 0;
 }
 
