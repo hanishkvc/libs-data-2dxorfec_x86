@@ -209,7 +209,8 @@ void fec_recover(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag 
 		printf("FEC:INFO:Recover: Take [%d] at recovery...\n", iTryCnt);
 		iDone = 1;
 		iContinue = 0;
-		for (int i = 0; i < dmatrix; i++) {
+		// Check along the rows
+		for (int i = 0; i <= dmatrix; i++) {
 			iNumErrBlocks = _mm_popcnt_u32(matFlag->rowview[i]);
 			if (iNumErrBlocks == 0) {
 				printf("FEC:INFO:GOOD:NO ERRBLOCKS: row[%d]\n", i);
@@ -226,7 +227,8 @@ void fec_recover(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag 
 				iDone = 0;
 			}
 		}
-		for (int i = 0; i < dmatrix; i++) {
+		// Check along the columns
+		for (int i = 0; i <= dmatrix; i++) {
 			iNumErrBlocks = _mm_popcnt_u32(matFlag->colview[i]);
 			if (iNumErrBlocks == 0) {
 				printf("FEC:INFO:GOOD:NO ERRBLOCKS: col[%d]\n", i);
