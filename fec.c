@@ -474,8 +474,8 @@ int main(int argc, char **argv)
 			iMode = FEC_PRGMODE_ALLFEC;
 		}
 	}
-	hFSrc = open(argv[2],O_RDONLY);
-	hFDst = open(argv[3],O_CREAT | O_WRONLY);
+	hFSrc = open(argv[2], O_RDONLY);
+	hFDst = open(argv[3], O_CREAT | O_WRONLY, S_IRUSR);
 
 
 	switch(iMode) {
