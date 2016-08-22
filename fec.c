@@ -196,6 +196,31 @@ void fec_checkfec(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag
 	}
 }
 
+#define FEC_RECOVER_ALONGROW 0
+#define FEC_RECOVER_ALONGCOL 1
+
+void fec_recoverblock(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag *matFlag, int errBlockRowY, int errBlockColX, int along)
+{
+	__m128i res, val;
+	int iCurRowOffset;
+	if (along == FEC_RECOVER_ALONGROW) {
+		iCurRowOffset = errBlockRowY*(dmatrix+1)*blocksize;
+		for(int i = 0; i < blocksize; i+= 16) {
+			res = _mm_setzero_si128();
+			for(int colx = 0; colx <= dmatrix; colx++) {
+				if (colx == errBlockColX) {
+					continue;
+				}
+				val = _mm_loadu_si128((__m128i*)&buf[iCurRowOffset+colx*blocksize+i]);
+				res = _mm_xor_si128(res, val);
+			}
+			_mm_storeu_si128((__m128i*)&buf[iCurRowOffset+errBlockColX*blocksize+i], res);
+		}
+	} else {
+	}
+	fecmatflag_blockclear(matFlag, errBlockRowY, errBlockColX);
+}
+
 void fec_recover(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag *matFlag)
 {
 	int iNumErrBlocks, iErrCol, iErrRow;
@@ -220,7 +245,7 @@ void fec_recover(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag 
 				printf("FEC:INFO:  OK:ONE ERRBLOCKS: row[%d]\n", i);
 				iErrCol = __bsfd(matFlag->rowview[i]);
 				printf("FEC:INFO: recovering err block at rowy[%d], colx[%d]\n", i, iErrCol);
-				fecmatflag_blockclear(matFlag, i, iErrCol);
+				fec_recoverblock(buf, blocksize, dmatrix, matFlag, i, iErrCol, FEC_RECOVER_ALONGROW);
 			}
 			if (iNumErrBlocks > 1) {
 				printf("FEC:INFO: BAD:MANY ERRBLOCKS: row[%d]\n", i);
@@ -238,7 +263,7 @@ void fec_recover(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag 
 				printf("FEC:INFO:  OK:ONE ERRBLOCKS: col[%d]\n", i);
 				iErrRow = __bsfd(matFlag->colview[i]);
 				printf("FEC:INFO: recovering err block at rowy[%d], colx[%d]\n", iErrRow, i);
-				fecmatflag_blockclear(matFlag, iErrRow, i);
+				fec_recoverblock(buf, blocksize, dmatrix, matFlag, iErrRow, i, FEC_RECOVER_ALONGCOL);
 			}
 			if (iNumErrBlocks > 1) {
 				printf("FEC:INFO: BAD:MANY ERRBLOCKS: col[%d]\n", i);
