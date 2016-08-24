@@ -24,6 +24,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
+#ifndef FEC_TARGETHAS_RDSEED
+#include <sys/time.h>
+#endif
 
 #define FEC_BLOCKSIZE 4096
 #define FEC_DATAMATRIX1D 8
@@ -392,6 +395,26 @@ int fec_storebuf(uint8_t *buf, int hFile, int blocksize, int dmatrix, int mode)
 	return 0;
 }
 
+int fec_getrandom16(uint16_t *rand)
+{
+	int res = 0;
+#ifdef FEC_TARGETHAS_RDSEED
+	res = _rdseed16_step(rand);
+#else
+	static int inited = 0;
+	struct timeval tv;
+
+	if (inited == 0) {
+		gettimeofday(&tv, NULL);
+		srandom(tv.tv_sec);
+		inited = 1;
+	}
+	res = 1;
+	*rand = random();
+#endif
+	return res;
+}
+
 void fec_injecterror(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag *matFlag)
 {
 	uint16_t iRand;
@@ -399,17 +422,17 @@ void fec_injecterror(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixF
 
 	for(int i = 0; i < 3; i++) {
 		printf("FEC:INFO: injecting error [%d]:",i);
-		if (_rdseed16_step(&iRand)) {
+		if (fec_getrandom16(&iRand)) {
 			colx = iRand % (dmatrix+1);
 		} else {
 			printf("RDSeed Failed\n");
 		}
-		if (_rdseed16_step(&iRand)) {
+		if (fec_getrandom16(&iRand)) {
 			rowy = iRand % (dmatrix+1);
 		} else {
 			printf("RDSeed Failed\n");
 		}
-		if (_rdseed16_step(&iRand)) {
+		if (fec_getrandom16(&iRand)) {
 			buf[rowy*(dmatrix+1)*blocksize+colx*blocksize+i] = iRand;
 		} else {
 			printf("RDSeed Failed\n");

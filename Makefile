@@ -1,10 +1,12 @@
 
+CFLAGS = -Wall -g -mpopcnt
 
 fec: fec.c
-	gcc -Wall -g -mrdseed -mpopcnt -o fec fec.c
+	gcc $(CFLAGS) -o fec fec.c
+	gcc $(CFLAGS) -mrdseed -DFEC_TARGETHAS_RDSEED -o fec_rdseed fec.c
 
 clean:
-	rm -i fec || /bin/true
+	rm -i fec fec_rdseed || /bin/true
 
 allclean: clean
 	rm -i test.bin* || /bin/true
