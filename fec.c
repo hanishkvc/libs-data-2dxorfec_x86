@@ -165,13 +165,13 @@ void fec_weakcrosscheck_amongflags(struct fecMatrixFlag *matFlag, int dmatrix)
 		if (curRowSet) {
 			if (curRowSetCnt == 0) {
 				iErrorOrDebug = 1;
-				printf("FEC:ERROR: checkfec says row[%d] has error, but rowview[%d] doesnt have any bit set\n", i, i);
+				printf("FEC:ERROR:weakcrosscheck: checkfec says row[%d] has error, but rowview[%d] doesnt have any bit set\n", i, i);
 			}
 		}
 		if (curRowSetCnt != 0) {
 			if (curRowSet == 0) {
 				iErrorOrDebug = 1;
-				printf("FEC:DEBUG: rowview[%d] has bits set, but checkfec didnt find error: Either cyclical complementing errors present, which cant be detected at global level OR bug in checkfec?\n", i);
+				printf("FEC:DEBUG:weakcrosscheck: rowview[%d] has bits set, but checkfec didnt find error: Either cyclical complementing errors present, which cant be detected at global level OR bug in checkfec?\n", i);
 			}
 		}
 		// Check along col
@@ -180,19 +180,20 @@ void fec_weakcrosscheck_amongflags(struct fecMatrixFlag *matFlag, int dmatrix)
 		if (curColSet) {
 			if (curColSetCnt == 0) {
 				iErrorOrDebug = 1;
-				printf("FEC:ERROR: checkfec says col[%d] has error, but colview[%d] doesnt have any bit set\n", i, i);
+				printf("FEC:ERROR:weakcrosscheck: checkfec says col[%d] has error, but colview[%d] doesnt have any bit set\n", i, i);
 			}
 		}
 		if (curColSetCnt != 0) {
 			if (curColSet == 0) {
 				iErrorOrDebug = 1;
-				printf("FEC:DEBUG: colview[%d] has bits set, but checkfec didnt find error: Either cyclical complementing errors present, which cant be detected at global level OR bug in checkfec?\n", i);
+				printf("FEC:DEBUG:weakcrosscheck: colview[%d] has bits set, but checkfec didnt find error: Either cyclical complementing errors present, which cant be detected at global level OR bug in checkfec?\n", i);
 			}
 		}
 	}
 	if (iErrorOrDebug == 0) {
 		printf("FEC:GOOD:weakcrosscheck: Didn't find any issues, but remember this is a weak check, some complementing errors can slip through\n");
 	} else {
+		printf("FEC:GOOD:weakcrosscheck: If there is a FEC:DEBUG: msg above corresponding to fec row/col, in most cases it can be ignored as checkfec ignores fec row/col because fec row/col doesn't have a fec block of its own, for its own recovery from within\n");
 		printf("FEC:GOOD:weakcrosscheck: Found issues, but remember this is a weak check, some complementing errors can confuse the logic\n");
 	}
 }
@@ -296,7 +297,7 @@ void fec_recover(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag 
 		iDone = 1;
 		iContinue = 0;
 		// Check along the rows
-		for (int i = 0; i <= dmatrix; i++) {
+		for (int i = 0; i < dmatrix; i++) {
 			iNumErrBlocks = _mm_popcnt_u32(matFlag->rowview[i]);
 			if (iNumErrBlocks == 0) {
 				printf("FEC:INFO:GOOD:NO ERRBLOCKS: row[%d]\n", i);
@@ -314,7 +315,7 @@ void fec_recover(uint8_t *buf, int blocksize, int dmatrix, struct fecMatrixFlag 
 			}
 		}
 		// Check along the columns
-		for (int i = 0; i <= dmatrix; i++) {
+		for (int i = 0; i < dmatrix; i++) {
 			iNumErrBlocks = _mm_popcnt_u32(matFlag->colview[i]);
 			if (iNumErrBlocks == 0) {
 				printf("FEC:INFO:GOOD:NO ERRBLOCKS: col[%d]\n", i);
